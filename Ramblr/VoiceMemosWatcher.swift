@@ -324,7 +324,7 @@ class VoiceMemosWatcher: ObservableObject {
 
     private func showTranscriptionNotification(_ text: String) {
         let content = UNMutableNotificationContent()
-        content.title = "Voice Memo Transcribed"
+        content.title = "Memorando de voz transcrito"
         let preview = text.prefix(100)
         content.body = String(preview) + (text.count > 100 ? "…" : "")
         content.sound = .default
@@ -345,11 +345,11 @@ class VoiceMemosWatcher: ObservableObject {
     private func showFullDiskAccessAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Full Disk Access Required"
-            alert.informativeText = "Ramblr needs Full Disk Access to read Voice Memos recordings. Please grant access in System Settings > Privacy & Security > Full Disk Access, then try enabling this feature again."
+            alert.messageText = "Acesso Total ao Disco necessário"
+            alert.informativeText = "O Ramblr precisa de Acesso Total ao Disco para ler as gravações dos Memorandos de Voz. Conceda o acesso em Ajustes do Sistema > Privacidade e Segurança > Acesso Total ao Disco e tente ativar este recurso novamente."
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Abrir Ajustes do Sistema")
+            alert.addButton(withTitle: "Cancelar")
 
             if alert.runModal() == .alertFirstButtonReturn {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles") {
@@ -362,8 +362,8 @@ class VoiceMemosWatcher: ObservableObject {
     private func showNoVoiceMemosAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Voice Memos Not Found"
-            alert.informativeText = "The Voice Memos recordings directory doesn't exist. Please record a Voice Memo first, then try enabling this feature."
+            alert.messageText = "Memorandos de Voz não encontrados"
+            alert.informativeText = "A pasta de gravações dos Memorandos de Voz não existe. Grave um memorando de voz primeiro e depois tente ativar este recurso."
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             alert.runModal()

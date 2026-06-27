@@ -59,17 +59,17 @@ private struct KeyEntryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title).font(.headline)
-            TextField("Paste here", text: $value)
+            TextField("Cole aqui", text: $value)
                 .textFieldStyle(RoundedBorderTextFieldStyle())
             HStack {
-                Button("Paste from Clipboard") {
+                Button("Colar da área de transferência") {
                     if let s = NSPasteboard.general.string(forType: .string) {
                         value = s
                     }
                 }
                 Spacer()
-                Button("Cancel") { onCancel() }
-                Button("Save") {
+                Button("Cancelar") { onCancel() }
+                Button("Salvar") {
                     onSave(value)
                 }
                 .keyboardShortcut(.defaultAction)

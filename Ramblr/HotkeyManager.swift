@@ -301,3 +301,137 @@ class HotkeyManager: ObservableObject {
         return nil
     }
 }
+
+// MARK: - Push-to-Talk (hold-to-record)
+
+/// Monitors a single configurable key being held down (press) and released (up),
+/// globally, so the user can "hold to talk". Supports modifier-only keys (e.g. right
+/// Command) via flagsChanged, and regular keys via keyDown/keyUp. Requires Accessibility
+/// permission (already requested by the app for auto-paste).
+final class PushToTalkManager: ObservableObject {
+    @Published private(set) var keyCode: UInt32
+    @Published var isEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(isEnabled, forKey: enabledKey)
+            logInfo("PushToTalkManager: isEnabled set to \(isEnabled)")
+            if isEnabled { startMonitoring() } else { stopMonitoring() }
+        }
+    }
+
+    private let enabledKey = "PushToTalkEnabled"
+    private let keyCodeKey = "PushToTalkKeyCode"
+
+    private var globalMonitor: Any?
+    private var localMonitor: Any?
+    private var isHolding = false
+
+    static let pressedNotification = NSNotification.Name("PushToTalkPressed")
+    static let releasedNotification = NSNotification.Name("PushToTalkReleased")
+
+    init() {
+        let storedKeyCode = UserDefaults.standard.object(forKey: keyCodeKey) as? Int
+        self.keyCode = UInt32(storedKeyCode ?? 54) // default: right Command (keyCode 54)
+        self.isEnabled = UserDefaults.standard.bool(forKey: enabledKey)
+        logInfo("PushToTalkManager: Initializing (enabled=\(isEnabled), keyCode=\(keyCode))")
+        if isEnabled { startMonitoring() }
+    }
+
+    func updateKeyCode(_ newKeyCode: UInt32) {
+        self.keyCode = newKeyCode
+        UserDefaults.standard.set(Int(newKeyCode), forKey: keyCodeKey)
+        logInfo("PushToTalkManager: keyCode updated to \(newKeyCode)")
+        if isEnabled { startMonitoring() } // restart to apply
+    }
+
+    var displayString: String { Self.displayName(forKeyCode: keyCode) }
+
+    private func startMonitoring() {
+        stopMonitoring()
+        isHolding = false
+        let mask: NSEvent.EventTypeMask = [.keyDown, .keyUp, .flagsChanged]
+        globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: mask) { [weak self] event in
+            self?.handle(event)
+        }
+        localMonitor = NSEvent.addLocalMonitorForEvents(matching: mask) { [weak self] event in
+            self?.handle(event)
+            return event
+        }
+        logInfo("PushToTalkManager: Monitoring started for keyCode \(keyCode)")
+    }
+
+    private func stopMonitoring() {
+        if let g = globalMonitor { NSEvent.removeMonitor(g); globalMonitor = nil }
+        if let l = localMonitor { NSEvent.removeMonitor(l); localMonitor = nil }
+        if isHolding { isHolding = false; NotificationCenter.default.post(name: Self.releasedNotification, object: nil) }
+    }
+
+    private func handle(_ event: NSEvent) {
+        let target = keyCode
+        if Self.isModifierKeyCode(target) {
+            guard event.type == .flagsChanged, UInt32(event.keyCode) == target else { return }
+            let pressed = (event.modifierFlags.rawValue & Self.deviceMask(forKeyCode: target)) != 0
+            if pressed { beginHold() } else { endHold() }
+        } else {
+            if event.type == .keyDown, UInt32(event.keyCode) == target {
+                if event.isARepeat { return }
+                beginHold()
+            } else if event.type == .keyUp, UInt32(event.keyCode) == target {
+                endHold()
+            }
+        }
+    }
+
+    private func beginHold() {
+        guard !isHolding else { return }
+        isHolding = true
+        logDebug("PushToTalkManager: key held down")
+        NotificationCenter.default.post(name: Self.pressedNotification, object: nil)
+    }
+
+    private func endHold() {
+        guard isHolding else { return }
+        isHolding = false
+        logDebug("PushToTalkManager: key released")
+        NotificationCenter.default.post(name: Self.releasedNotification, object: nil)
+    }
+
+    deinit { stopMonitoring() }
+
+    // MARK: - Key code helpers
+
+    /// Modifier key codes (left/right Cmd, Shift, Ctrl, Option, and Fn). Caps Lock (57) excluded.
+    static func isModifierKeyCode(_ kc: UInt32) -> Bool {
+        return [54, 55, 56, 58, 59, 60, 61, 62, 63].contains(Int(kc))
+    }
+
+    /// Device-dependent modifier mask used to tell press from release for a given modifier key.
+    static func deviceMask(forKeyCode kc: UInt32) -> UInt {
+        switch Int(kc) {
+        case 54: return 0x10      // right Command
+        case 55: return 0x08      // left Command
+        case 56: return 0x02      // left Shift
+        case 60: return 0x04      // right Shift
+        case 59: return 0x01      // left Control
+        case 62: return 0x2000    // right Control
+        case 58: return 0x20      // left Option
+        case 61: return 0x40      // right Option
+        case 63: return 0x800000  // Fn (NSEvent.ModifierFlags.function)
+        default: return 0
+        }
+    }
+
+    static func displayName(forKeyCode kc: UInt32) -> String {
+        switch Int(kc) {
+        case 54: return "⌘ direito"
+        case 55: return "⌘ esquerdo"
+        case 56: return "⇧ esquerdo"
+        case 60: return "⇧ direito"
+        case 59: return "⌃ esquerdo"
+        case 62: return "⌃ direito"
+        case 58: return "⌥ esquerdo"
+        case 61: return "⌥ direito"
+        case 63: return "Fn"
+        default: return HotkeyManager.keyName(fromKeyCode: kc) ?? "Tecla \(kc)"
+        }
+    }
+}

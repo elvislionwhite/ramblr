@@ -30,7 +30,7 @@ final class ModelSetupPanel {
 
         let hosting = NSHostingController(rootView: content)
         let panel = NSPanel(contentViewController: hosting)
-        panel.title = "Transcription Setup"
+        panel.title = "Configuração de transcrição"
         panel.styleMask = [.titled, .closable, .utilityWindow]
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
@@ -85,27 +85,27 @@ private struct ModelSetupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Transcription Setup").font(.headline)
+            Text("Configuração de transcrição").font(.headline)
 
             HStack {
-                Picker("Model:", selection: $model) {
+                Picker("Modelo:", selection: $model) {
                     Text("Whisper (OpenAI)").tag("openai:whisper-1")
                     Text("Whisper (Groq)").tag("groq:whisper-large-v3")
                     Text("GPT-4o").tag("openai:gpt-4o-transcribe")
                     Text("GPT-4o mini").tag("openai:gpt-4o-mini-transcribe")
                 }
                 .pickerStyle(.menu)
-                Text("Groq recommended — much faster.")
+                Text("Groq recomendado — muito mais rápido.")
                     .font(.caption)
                     .foregroundColor(.secondary)
             }
 
             if needsOpenAI {
                 HStack {
-                    Text("OpenAI API Key:")
+                    Text("Chave de API da OpenAI:")
                     SecureField("sk-...", text: $openAIKey)
                         .textFieldStyle(.roundedBorder)
-                    Button("Paste") {
+                    Button("Colar") {
                         if let s = NSPasteboard.general.string(forType: .string) {
                             openAIKey = s
                         }
@@ -115,10 +115,10 @@ private struct ModelSetupView: View {
 
             if needsGroq {
                 HStack {
-                    Text("Groq API Key:")
+                    Text("Chave de API da Groq:")
                     SecureField("gsk_...", text: $groqKey)
                         .textFieldStyle(.roundedBorder)
-                    Button("Paste") {
+                    Button("Colar") {
                         if let s = NSPasteboard.general.string(forType: .string) {
                             groqKey = s
                         }
@@ -127,15 +127,15 @@ private struct ModelSetupView: View {
             }
 
             if requiredKeyMissing {
-                Text("API key required for the selected model.")
+                Text("Chave de API necessária para o modelo selecionado.")
                     .font(.caption)
                     .foregroundColor(.orange)
             }
 
             HStack {
                 Spacer()
-                Button("Cancel") { onCancel() }
-                Button("Save") {
+                Button("Cancelar") { onCancel() }
+                Button("Salvar") {
                     onSave(model, openAIKey, groqKey)
                 }
                 .keyboardShortcut(.defaultAction)

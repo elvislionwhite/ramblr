@@ -9,6 +9,7 @@ struct MenuBarView: View {
     @ObservedObject var coordinator: RecordingCoordinator
     @ObservedObject var voiceMemosWatcher: VoiceMemosWatcher
     @ObservedObject var mediaPlaybackManager: MediaPlaybackManager
+    @ObservedObject var pushToTalkManager: PushToTalkManager
     let updater: SPUUpdater
     @State private var apiKey: String = UserDefaults.standard.string(forKey: "OpenAIAPIKey") ?? ""
     @State private var groqApiKey: String = UserDefaults.standard.string(forKey: "GroqAPIKey") ?? ""
@@ -16,18 +17,20 @@ struct MenuBarView: View {
     @State private var showHotkeyChangePopover: Bool = false
     @State private var showCancelHotkeyChangePopover: Bool = false
     @State private var showClipboardHotkeyChangePopover: Bool = false
+    @State private var showPTTHotkeyChangePopover: Bool = false
     @State private var saveFolderEnabled: Bool = UserDefaults.standard.bool(forKey: "TranscriptionSaveFolderEnabled")
     @State private var saveFolderPath: String = UserDefaults.standard.string(forKey: "TranscriptionSaveFolderPath") ?? ""
     @State private var saveSubdirectoryFormat: String = UserDefaults.standard.string(forKey: "TranscriptionSaveSubdirectoryFormat") ?? "{year}/{month}/{day}"
 
 
-    init(audioManager: AudioManager, hotkeyManager: HotkeyManager, transcriptionManager: TranscriptionManager, coordinator: RecordingCoordinator, voiceMemosWatcher: VoiceMemosWatcher, mediaPlaybackManager: MediaPlaybackManager, updater: SPUUpdater) {
+    init(audioManager: AudioManager, hotkeyManager: HotkeyManager, transcriptionManager: TranscriptionManager, coordinator: RecordingCoordinator, voiceMemosWatcher: VoiceMemosWatcher, mediaPlaybackManager: MediaPlaybackManager, pushToTalkManager: PushToTalkManager, updater: SPUUpdater) {
         self.audioManager = audioManager
         self.hotkeyManager = hotkeyManager
         self.transcriptionManager = transcriptionManager
         self.coordinator = coordinator
         self.voiceMemosWatcher = voiceMemosWatcher
         self.mediaPlaybackManager = mediaPlaybackManager
+        self.pushToTalkManager = pushToTalkManager
         self.updater = updater
     }
     
@@ -41,13 +44,13 @@ struct MenuBarView: View {
             HStack {
                 Text("Status:")
                 if mediaPlaybackManager.isEnabled && mediaPlaybackManager.availabilityError != nil {
-                    Text("Media pause unavailable")
+                    Text("Pausa de mídia indisponível")
                         .foregroundColor(.red)
                 } else if (autoPasteEnabled || mediaPlaybackManager.isEnabled) && !transcriptionManager.hasAccessibilityPermission {
-                    Text("Needs Accessibility Permission")
+                    Text("Precisa de permissão de Acessibilidade")
                         .foregroundColor(.red)
                 } else if audioManager.isRecording {
-                    Text("Recording...")
+                    Text("Gravando...")
                         .foregroundColor(.red)
                 } else if transcriptionManager.isTranscribing {
                     HStack(spacing: 4) {
@@ -55,7 +58,7 @@ struct MenuBarView: View {
                             Text(transcriptionManager.statusMessage)
                                 .foregroundColor(.yellow)
                         } else {
-                            Text("Transcribing")
+                            Text("Transcrevendo")
                                 .foregroundColor(.yellow)
                         }
                         ProgressView()
@@ -67,7 +70,7 @@ struct MenuBarView: View {
                         .foregroundColor(.orange)
                         .opacity(0.6)
                 } else {
-                    Text("Ready")
+                    Text("Pronto")
                         .foregroundColor(.primary)
                 }
             }
@@ -78,14 +81,14 @@ struct MenuBarView: View {
                 // Model & API key summary
                 HStack(spacing: 4) {
                     if !transcriptionManager.hasRequiredAPIKey {
-                        Text("Set up API key to get started")
+                        Text("Configure a chave de API para começar")
                             .foregroundColor(.red)
                     } else {
-                        Text("Using \(transcriptionManager.modelDisplayName)")
+                        Text("Usando \(transcriptionManager.modelDisplayName)")
                             .foregroundColor(.secondary)
                     }
                     Button(action: { openModelSetup() }) {
-                        Text(transcriptionManager.hasRequiredAPIKey ? "Change" : "Set Up").underline()
+                        Text(transcriptionManager.hasRequiredAPIKey ? "Alterar" : "Configurar").underline()
                     }
                     .buttonStyle(.plain)
                 }
@@ -95,8 +98,8 @@ struct MenuBarView: View {
 
                 Toggle(isOn: $autoPasteEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Auto-paste into active app")
-                        Text("Off: copy to clipboard + notify")
+                        Text("Colar automaticamente no app ativo")
+                        Text("Desligado: copia para a área de transferência + notifica")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -113,8 +116,8 @@ struct MenuBarView: View {
 
                 Toggle(isOn: $mediaPlaybackManager.isEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Pause media while recording")
-                        Text("Auto-pauses playback, resumes when done")
+                        Text("Pausar mídia durante a gravação")
+                        Text("Pausa a reprodução e retoma ao terminar")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -138,8 +141,8 @@ struct MenuBarView: View {
 
                 Toggle(isOn: $voiceMemosWatcher.isEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Auto-transcribe Voice Memos")
-                        Text("Watches for new recordings from Apple Voice Memos")
+                        Text("Transcrever Memorandos de Voz automaticamente")
+                        Text("Monitora novas gravações do app Memorandos de Voz da Apple")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -150,7 +153,7 @@ struct MenuBarView: View {
                         ProgressView()
                             .scaleEffect(0.5)
                             .frame(width: 12, height: 12)
-                        Text("Transcribing Voice Memo...")
+                        Text("Transcrevendo memorando de voz...")
                             .font(.caption)
                             .foregroundColor(.orange)
                     }
@@ -161,20 +164,20 @@ struct MenuBarView: View {
 
                 Toggle(isOn: $saveFolderEnabled) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Save transcriptions to folder")
+                        Text("Salvar transcrições em uma pasta")
                         HStack(spacing: 4) {
                             if saveFolderEnabled && !saveFolderPath.isEmpty {
                                 Button(action: {
                                     NSWorkspace.shared.open(URL(fileURLWithPath: saveFolderPath))
                                 }) {
-                                    Text("Saving to \(abbreviatePath(saveFolderPath))")
+                                    Text("Salvando em \(abbreviatePath(saveFolderPath))")
                                         .underline()
                                         .lineLimit(1)
                                         .truncationMode(.middle)
                                 }
                                 .buttonStyle(.plain)
                             } else {
-                                Text("Each transcription saved as a .txt file")
+                                Text("Cada transcrição salva como um arquivo .txt")
                             }
                             if saveFolderEnabled {
                                 Button(action: {
@@ -188,7 +191,7 @@ struct MenuBarView: View {
                                         transcriptionManager.setSaveSubdirectoryFormat(newFormat)
                                     }
                                 }) {
-                                    Text("Configure").underline()
+                                    Text("Configurar").underline()
                                 }
                                 .buttonStyle(.plain)
                             }
@@ -200,14 +203,65 @@ struct MenuBarView: View {
                 .onChange(of: saveFolderEnabled) { _, newValue in
                     transcriptionManager.setSaveFolderEnabled(newValue)
                 }
+
+                Divider().padding(.top, 6)
+
+                Toggle(isOn: $pushToTalkManager.isEnabled) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Segurar tecla para falar")
+                        if pushToTalkManager.isEnabled {
+                            HStack(spacing: 4) {
+                                Text("Segure")
+                                Text(pushToTalkManager.displayString)
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                                Text("e fale; solte para transcrever.")
+                                Button(action: { showPTTHotkeyChangePopover = true }) {
+                                    Text("Alterar").underline()
+                                }
+                                .buttonStyle(.plain)
+                                .popover(isPresented: $showPTTHotkeyChangePopover, arrowEdge: .top) {
+                                    VStack(spacing: 6) {
+                                        Text("Pressione a tecla que quer segurar")
+                                            .font(.headline)
+                                        Text("Dica: ⌘ direito não atrapalha atalhos")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                        PTTKeyCaptureRepresentable(
+                                            onCaptured: { kc in
+                                                pushToTalkManager.updateKeyCode(kc)
+                                                showPTTHotkeyChangePopover = false
+                                            },
+                                            onCancel: { showPTTHotkeyChangePopover = false }
+                                        )
+                                        .frame(width: 240, height: 0)
+                                    }
+                                    .padding(8)
+                                    .padding(.top, 6)
+                                }
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        } else {
+                            Text("Segure uma tecla pra gravar, solte pra transcrever")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                .onChange(of: pushToTalkManager.isEnabled) { _, newValue in
+                    if newValue {
+                        transcriptionManager.checkAccessibilityPermission(shouldPrompt: true)
+                    }
+                }
             }
             .padding(.vertical, 5)
             
             if (autoPasteEnabled || mediaPlaybackManager.isEnabled) && !transcriptionManager.hasAccessibilityPermission {
-                Text("⚠️ Accessibility permission required")
+                Text("⚠️ Permissão de Acessibilidade necessária")
                     .font(.caption)
                     .foregroundColor(.red)
-                Button("Open System Settings") {
+                Button("Abrir Ajustes do Sistema") {
                     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
                         NSWorkspace.shared.open(url)
                         logInfo("Opening Accessibility settings")
@@ -224,7 +278,7 @@ struct MenuBarView: View {
                     }) {
                         HStack(spacing: 6) {
                             Image(systemName: audioManager.isRecording ? "stop.circle" : "record.circle")
-                            Text(audioManager.isRecording ? "Stop Recording" : "Start Recording")
+                            Text(audioManager.isRecording ? "Parar gravação" : "Iniciar gravação")
                         }
                     }
                     .keyboardShortcut(.defaultAction)
@@ -235,7 +289,7 @@ struct MenuBarView: View {
                         }) {
                             HStack(spacing: 6) {
                                 Image(systemName: "xmark.circle")
-                                Text("Cancel")
+                                Text("Cancelar")
                             }
                         }
                         .buttonStyle(.borderless)
@@ -247,7 +301,7 @@ struct MenuBarView: View {
                 }) {
                     HStack(spacing: 6) {
                         Image(systemName: "doc.badge.plus")
-                        Text("Transcribe File...")
+                        Text("Transcrever arquivo...")
                     }
                 }
                 .buttonStyle(.plain)
@@ -258,20 +312,20 @@ struct MenuBarView: View {
             // Hotkey hints and change links
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
-                    Text("Press")
+                    Text("Pressione")
                     Text(hotkeyManager.displayString)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundColor(.secondary)
-                    Text("to start/stop recording.")
+                    Text("para iniciar/parar a gravação.")
                     Button(action: { showHotkeyChangePopover = true }) {
-                        Text("Change").underline()
+                        Text("Alterar").underline()
                     }
                     .buttonStyle(.plain)
                     .popover(isPresented: $showHotkeyChangePopover, arrowEdge: .top) {
                         VStack(spacing: 6) {
-                            Text("Press desired shortcut")
+                            Text("Pressione o atalho desejado")
                                 .font(.headline)
-                            Text("Include modifiers like ⌘ ⌥ ⌃ ⇧")
+                            Text("Inclua modificadores como ⌘ ⌥ ⌃ ⇧")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .font(.subheadline)
@@ -291,20 +345,20 @@ struct MenuBarView: View {
                 }
                 if autoPasteEnabled {
                     HStack(spacing: 4) {
-                        Text("Press")
+                        Text("Pressione")
                         Text(hotkeyManager.clipboardDisplayString)
                             .font(.system(.caption, design: .monospaced))
                             .foregroundColor(.secondary)
-                        Text("to record to clipboard.")
+                        Text("para gravar na área de transferência.")
                         Button(action: { showClipboardHotkeyChangePopover = true }) {
-                            Text("Change").underline()
+                            Text("Alterar").underline()
                         }
                         .buttonStyle(.plain)
                         .popover(isPresented: $showClipboardHotkeyChangePopover, arrowEdge: .top) {
                             VStack(spacing: 6) {
-                                Text("Press desired shortcut")
+                                Text("Pressione o atalho desejado")
                                     .font(.headline)
-                                Text("Include modifiers like ⌘ ⌥ ⌃ ⇧")
+                                Text("Inclua modificadores como ⌘ ⌥ ⌃ ⇧")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .font(.subheadline)
@@ -324,20 +378,20 @@ struct MenuBarView: View {
                     }
                 }
                 HStack(spacing: 4) {
-                    Text("Press")
+                    Text("Pressione")
                     Text(hotkeyManager.cancelDisplayString)
                         .font(.system(.caption, design: .monospaced))
                         .foregroundColor(.secondary)
-                    Text("to cancel recording.")
+                    Text("para cancelar a gravação.")
                     Button(action: { showCancelHotkeyChangePopover = true }) {
-                        Text("Change").underline()
+                        Text("Alterar").underline()
                     }
                     .buttonStyle(.plain)
                     .popover(isPresented: $showCancelHotkeyChangePopover, arrowEdge: .top) {
                         VStack(spacing: 6) {
-                            Text("Press desired shortcut")
+                            Text("Pressione o atalho desejado")
                                 .font(.headline)
-                            Text("Include modifiers like ⌘ ⌥ ⌃ ⇧")
+                            Text("Inclua modificadores como ⌘ ⌥ ⌃ ⇧")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                                 .font(.subheadline)
@@ -363,7 +417,7 @@ struct MenuBarView: View {
             
             // History section
             if !transcriptionManager.history.isEmpty {
-                Text("History")
+                Text("Histórico")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                 VStack(alignment: .leading, spacing: 6) {
@@ -390,7 +444,7 @@ struct MenuBarView: View {
                 }) {
                     HStack {
                         Image(systemName: "doc.text.magnifyingglass")
-                        Text("View Logs")
+                        Text("Ver registros")
                     }
                 }
 
@@ -402,7 +456,7 @@ struct MenuBarView: View {
                     }) {
                         HStack {
                             Image(systemName: "trash")
-                            Text("Clear History")
+                            Text("Limpar histórico")
                         }
                     }
                 }
@@ -413,7 +467,7 @@ struct MenuBarView: View {
                     logInfo("User initiated app quit")
                     NSApplication.shared.terminate(nil)
                 }) {
-                    Text("Quit")
+                    Text("Sair")
                 }
             }
 
@@ -495,6 +549,54 @@ private final class KeyCaptureView: NSView {
         // Ignore standalone modifier changes
     }
     
+    override func cancelOperation(_ sender: Any?) {
+        onCancel?()
+    }
+}
+
+// MARK: - Push-to-Talk key capture (accepts a regular key OR a lone modifier like right ⌘)
+
+private struct PTTKeyCaptureRepresentable: NSViewRepresentable {
+    let onCaptured: (UInt32) -> Void
+    let onCancel: () -> Void
+
+    func makeNSView(context: Context) -> PTTKeyCaptureView {
+        let v = PTTKeyCaptureView()
+        v.onCaptured = onCaptured
+        v.onCancel = onCancel
+        return v
+    }
+
+    func updateNSView(_ nsView: PTTKeyCaptureView, context: Context) {}
+}
+
+private final class PTTKeyCaptureView: NSView {
+    var onCaptured: ((UInt32) -> Void)?
+    var onCancel: (() -> Void)?
+
+    override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in
+            self?.window?.makeFirstResponder(self)
+        }
+    }
+
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 53 { onCancel?(); return } // Esc cancels
+        onCaptured?(UInt32(event.keyCode))
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        // Capture a lone modifier when it is pressed down (mask bit becomes set)
+        let kc = UInt32(event.keyCode)
+        let mask = PushToTalkManager.deviceMask(forKeyCode: kc)
+        if mask != 0, (event.modifierFlags.rawValue & mask) != 0 {
+            onCaptured?(kc)
+        }
+    }
+
     override func cancelOperation(_ sender: Any?) {
         onCancel?()
     }

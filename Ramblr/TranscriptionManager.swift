@@ -17,19 +17,19 @@ enum TranscriptionError: Error {
     var description: String {
         switch self {
         case .networkError(let error):
-            return "Network error: \(error.localizedDescription)"
+            return "Erro de rede: \(error.localizedDescription)"
         case .apiError(let code, let message):
             return "API error (code \(code)): \(message)"
         case .noData:
-            return "No data received from API"
+            return "Nenhum dado recebido da API"
         case .decodingError:
-            return "Failed to decode API response"
+            return "Falha ao decodificar a resposta da API"
         case .noAPIKey:
-            return "No API key provided"
+            return "Nenhuma chave de API fornecida"
         case .fileError(let message):
-            return "File error: \(message)"
+            return "Erro de arquivo: \(message)"
         case .timeout:
-            return "Request timed out"
+            return "A solicitação expirou"
         }
     }
 }
@@ -165,13 +165,13 @@ class TranscriptionManager: ObservableObject {
         var currentRetry = 0
         let prefix = statusPrefix.map { "\($0): " } ?? ""
 
-        updateStatus("\(prefix)Starting transcription...")
+        updateStatus("\(prefix)Iniciando transcrição...")
 
         func attemptTranscription() {
             logInfo("Attempting transcription (try \(currentRetry + 1) of \(self.maxRetries + 1))")
 
             if currentRetry > 0 {
-                updateStatus("\(prefix)Retry \(currentRetry) of \(self.maxRetries)...")
+                updateStatus("\(prefix)Tentativa \(currentRetry) de \(self.maxRetries)...")
             }
 
             self.performTranscriptionRequest(audioURL: audioURL) { result in
@@ -184,7 +184,7 @@ class TranscriptionManager: ObservableObject {
                     logError("Transcription attempt \(currentRetry + 1) failed: \(error.description)")
 
                     if case .noAPIKey = error {
-                        self.updateStatus("Add your API key in Settings")
+                        self.updateStatus("Adicione sua chave de API nas Configurações")
                         completion(nil)
                         return
                     }
@@ -192,7 +192,7 @@ class TranscriptionManager: ObservableObject {
                     if currentRetry < self.maxRetries {
                         currentRetry += 1
                         let delay = pow(2.0, Double(currentRetry - 1))
-                        self.updateStatus("\(prefix)Retry in \(Int(delay))s... (\(currentRetry)/\(self.maxRetries))")
+                        self.updateStatus("\(prefix)Nova tentativa em \(Int(delay))s... (\(currentRetry)/\(self.maxRetries))")
                         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
                             attemptTranscription()
                         }
@@ -225,13 +225,13 @@ class TranscriptionManager: ObservableObject {
     }
 
     private func splitAndTranscribe(audioURL: URL, completion: @escaping (String?) -> Void) {
-        updateStatus("Preparing large audio file...")
+        updateStatus("Preparando arquivo de áudio grande...")
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             guard let self = self else { return }
             do {
                 let chunkURLs = try self.splitAudioFile(audioURL: audioURL)
                 guard !chunkURLs.isEmpty else {
-                    self.updateStatus("Audio file is empty")
+                    self.updateStatus("O arquivo de áudio está vazio")
                     completion(nil)
                     return
                 }
@@ -239,7 +239,7 @@ class TranscriptionManager: ObservableObject {
                 self.transcribeChunksWithRetry(chunkURLs, completion: completion)
             } catch {
                 logError("Failed to split audio file: \(error)")
-                self.updateStatus("Failed to prepare audio for upload")
+                self.updateStatus("Falha ao preparar o áudio para envio")
                 completion(nil)
             }
         }
@@ -267,7 +267,7 @@ class TranscriptionManager: ObservableObject {
                 return
             }
 
-            let statusPrefix = "Part \(index + 1) of \(chunkURLs.count)"
+            let statusPrefix = "Parte \(index + 1) de \(chunkURLs.count)"
             performTranscriptionWithRetry(audioURL: chunkURLs[index], statusPrefix: statusPrefix) { text in
                 guard let text = text else {
                     finishAndCleanup(success: false)
@@ -296,12 +296,12 @@ class TranscriptionManager: ObservableObject {
             channels: readFormat.channelCount,
             interleaved: true
         ) else {
-            throw TranscriptionError.fileError("Failed to create output format")
+            throw TranscriptionError.fileError("Falha ao criar o formato de saída")
         }
 
         let outputBytesPerFrame = Int(outputFormat.streamDescription.pointee.mBytesPerFrame)
         if outputBytesPerFrame <= 0 {
-            throw TranscriptionError.fileError("Unsupported audio format for chunking")
+            throw TranscriptionError.fileError("Formato de áudio não suportado para divisão")
         }
 
         let maxChunkBytes = maxUploadBytes - chunkSafetyMarginBytes
@@ -315,7 +315,7 @@ class TranscriptionManager: ObservableObject {
             if framesToRead == 0 { break }
 
             guard let buffer = AVAudioPCMBuffer(pcmFormat: readFormat, frameCapacity: framesToRead) else {
-                throw TranscriptionError.fileError("Failed to allocate audio buffer")
+                throw TranscriptionError.fileError("Falha ao alocar o buffer de áudio")
             }
 
             try audioFile.read(into: buffer, frameCount: framesToRead)
@@ -326,7 +326,7 @@ class TranscriptionManager: ObservableObject {
             try chunkFile.write(from: buffer)
 
             if let chunkSize = fileSize(at: chunkURL), chunkSize > Int64(maxUploadBytes) {
-                throw TranscriptionError.fileError("Chunk exceeded size limit")
+                throw TranscriptionError.fileError("O trecho excedeu o limite de tamanho")
             }
 
             chunkURLs.append(chunkURL)
@@ -476,7 +476,7 @@ class TranscriptionManager: ObservableObject {
                 if httpResponse.statusCode != 200 {
                     logError("Transcription API error: Non-200 status code (\(httpResponse.statusCode))")
                     
-                    var errorMessage = "Unknown error"
+                    var errorMessage = "Erro desconhecido"
                     
                     if let data = data, let errorJson = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                         logError("API error response: \(errorJson)")
@@ -628,11 +628,11 @@ class TranscriptionManager: ObservableObject {
         pasteboard.setString(text, forType: .string)
 
         DispatchQueue.main.async {
-            self.statusMessage = "Copied to clipboard"
+            self.statusMessage = "Copiado para a área de transferência"
             NotificationCenter.default.post(
                 name: NSNotification.Name("TranscriptionStatusChanged"),
                 object: nil,
-                userInfo: ["status": "Copied to clipboard"]
+                userInfo: ["status": "Copiado para a área de transferência"]
             )
         }
 
@@ -640,9 +640,9 @@ class TranscriptionManager: ObservableObject {
             guard authorized else { return }
 
             let content = UNMutableNotificationContent()
-            content.title = "Transcription copied to clipboard"
+            content.title = "Transcrição copiada para a área de transferência"
             let preview = text.prefix(80)
-            content.body = preview.isEmpty ? "Ready to paste." : "\(preview)…"
+            content.body = preview.isEmpty ? "Pronto para colar." : "\(preview)…"
             content.sound = .default
 
             let request = UNNotificationRequest(
@@ -731,11 +731,11 @@ class TranscriptionManager: ObservableObject {
         DispatchQueue.main.async {
             self.history.removeAll()
             UserDefaults.standard.removeObject(forKey: self.historyKey)
-            self.statusMessage = "History cleared"
+            self.statusMessage = "Histórico limpo"
             NotificationCenter.default.post(
                 name: NSNotification.Name("TranscriptionStatusChanged"),
                 object: nil,
-                userInfo: ["status": "History cleared"]
+                userInfo: ["status": "Histórico limpo"]
             )
         }
     }
@@ -824,11 +824,11 @@ class TranscriptionManager: ObservableObject {
     private func showAccessibilityAlert() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Permission Required"
-            alert.informativeText = "Ramblr needs accessibility permission to simulate keyboard events. Please grant access in System Settings > Privacy & Security > Accessibility, then quit and relaunch Ramblr."
+            alert.messageText = "Permissão necessária"
+            alert.informativeText = "O Ramblr precisa de permissão de Acessibilidade para simular eventos de teclado. Conceda o acesso em Ajustes do Sistema > Privacidade e Segurança > Acessibilidade e, em seguida, encerre e reabra o Ramblr."
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Abrir Ajustes do Sistema")
+            alert.addButton(withTitle: "Cancelar")
             
             if alert.runModal() == .alertFirstButtonReturn {
                 if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {

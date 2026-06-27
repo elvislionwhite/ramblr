@@ -25,7 +25,7 @@ struct CheckForUpdatesView: View {
         Button(action: { updater.checkForUpdates() }) {
             HStack {
                 Image(systemName: "arrow.triangle.2.circlepath")
-                Text("Check for Updates…")
+                Text("Verificar atualizações…")
             }
         }
         .disabled(!viewModel.canCheckForUpdates)

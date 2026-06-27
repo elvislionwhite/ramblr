@@ -41,6 +41,7 @@ struct RamblrApp: App {
     @StateObject private var coordinator: RecordingCoordinator
     @StateObject private var voiceMemosWatcher: VoiceMemosWatcher
     @StateObject private var mediaPlaybackManager: MediaPlaybackManager
+    @StateObject private var pushToTalkManager: PushToTalkManager
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
     // Initialize Logger early
@@ -54,6 +55,7 @@ struct RamblrApp: App {
         let transcription = TranscriptionManager()
         let hotkey = HotkeyManager()
         let mediaPlayback = MediaPlaybackManager()
+        let pushToTalk = PushToTalkManager()
 
         // Initialize coordinator with the same instances
         let coordinator = RecordingCoordinator(
@@ -70,6 +72,7 @@ struct RamblrApp: App {
         _coordinator = StateObject(wrappedValue: coordinator)
         _voiceMemosWatcher = StateObject(wrappedValue: voiceMemos)
         _mediaPlaybackManager = StateObject(wrappedValue: mediaPlayback)
+        _pushToTalkManager = StateObject(wrappedValue: pushToTalk)
         
         // Log system info
         let osVersion = ProcessInfo.processInfo.operatingSystemVersionString
@@ -85,6 +88,7 @@ struct RamblrApp: App {
                        coordinator: coordinator,
                        voiceMemosWatcher: voiceMemosWatcher,
                        mediaPlaybackManager: mediaPlaybackManager,
+                       pushToTalkManager: pushToTalkManager,
                        updater: appDelegate.updaterController.updater)
         } label: {
             Image("MenuBarIcon")

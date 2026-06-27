@@ -40,11 +40,11 @@ class AudioManager: NSObject, ObservableObject {
             } else {
                 DispatchQueue.main.async {
                     let alert = NSAlert()
-                    alert.messageText = "Microphone Access Required"
-                    alert.informativeText = "Ramblr needs microphone access to record audio for transcription. Please grant access in System Settings > Privacy & Security > Microphone."
+                    alert.messageText = "Acesso ao microfone necessário"
+                    alert.informativeText = "O Ramblr precisa de acesso ao microfone para gravar áudio para transcrição. Conceda o acesso em Ajustes do Sistema > Privacidade e Segurança > Microfone."
                     alert.alertStyle = .warning
-                    alert.addButton(withTitle: "Open System Settings")
-                    alert.addButton(withTitle: "Cancel")
+                    alert.addButton(withTitle: "Abrir Ajustes do Sistema")
+                    alert.addButton(withTitle: "Cancelar")
                     
                     if alert.runModal() == .alertFirstButtonReturn {
                         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {

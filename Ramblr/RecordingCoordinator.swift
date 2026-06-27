@@ -11,6 +11,13 @@ class RecordingCoordinator: ObservableObject {
     private var clipboardOnlyRecording = false
     private var cancellables = Set<AnyCancellable>()
 
+    // Push-to-talk state
+    private var pttHeld = false
+    private var pttPendingStop = false
+    private var pttPendingCancel = false
+    private var pttPressTime: Date?
+    private let pttMinHold: TimeInterval = 0.3 // ignore accidental quick taps
+
     @Published var transcriptionStatus: String = ""
 
     init(audioManager: AudioManager, transcriptionManager: TranscriptionManager, mediaPlaybackManager: MediaPlaybackManager) {
@@ -59,6 +66,31 @@ class RecordingCoordinator: ObservableObject {
             logDebug("RecordingCoordinator: Received clipboard hotkey notification")
             self?.toggleRecording(clipboardOnly: true)
         }
+        // Push-to-talk: hold to record, release to stop + transcribe
+        NotificationCenter.default.addObserver(
+            forName: PushToTalkManager.pressedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.pushToTalkStart()
+        }
+        NotificationCenter.default.addObserver(
+            forName: PushToTalkManager.releasedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.pushToTalkStop()
+        }
+        // Recording actually starts asynchronously; observe it to fulfil any deferred PTT action
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("RecordingStatusChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            if (note.userInfo?["isRecording"] as? Bool) == true {
+                self?.pttHandleRecordingStarted()
+            }
+        }
     }
     
     @objc private func updateTranscriptionStatus(_ notification: Notification) {
@@ -78,8 +110,8 @@ class RecordingCoordinator: ObservableObject {
     func selectFileForTranscription() {
         logInfo("RecordingCoordinator: Opening file picker for transcription")
         let panel = NSOpenPanel()
-        panel.title = "Select Audio File"
-        panel.prompt = "Transcribe"
+        panel.title = "Selecionar arquivo de áudio"
+        panel.prompt = "Transcrever"
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
         panel.canChooseFiles = true
@@ -118,15 +150,57 @@ class RecordingCoordinator: ObservableObject {
             }
         }
         DispatchQueue.main.async {
-            self.transcriptionManager.statusMessage = "Recording cancelled"
+            self.transcriptionManager.statusMessage = "Gravação cancelada"
             NotificationCenter.default.post(
                 name: NSNotification.Name("TranscriptionStatusChanged"),
                 object: nil,
-                userInfo: ["status": "Recording cancelled"]
+                userInfo: ["status": "Gravação cancelada"]
             )
         }
     }
     
+    // MARK: - Push-to-Talk
+
+    private func pushToTalkStart() {
+        guard !pttHeld else { return }
+        guard !audioManager.isRecording else {
+            logInfo("RecordingCoordinator: Push-to-talk ignored (already recording)")
+            return
+        }
+        pttHeld = true
+        pttPendingStop = false
+        pttPendingCancel = false
+        pttPressTime = Date()
+        logInfo("RecordingCoordinator: Push-to-talk start")
+        toggleRecording() // begins recording (not currently recording)
+    }
+
+    private func pushToTalkStop() {
+        guard pttHeld else { return }
+        pttHeld = false
+        let elapsed = Date().timeIntervalSince(pttPressTime ?? Date())
+        let tooShort = elapsed < pttMinHold
+        logInfo("RecordingCoordinator: Push-to-talk stop (held \(String(format: "%.2f", elapsed))s, tooShort=\(tooShort))")
+        if audioManager.isRecording {
+            if tooShort { cancelRecording() } else { toggleRecording() } // stop + transcribe
+        } else {
+            // The async recording start has not completed yet; defer the action
+            if tooShort { pttPendingCancel = true } else { pttPendingStop = true }
+        }
+    }
+
+    private func pttHandleRecordingStarted() {
+        if pttPendingCancel {
+            pttPendingCancel = false
+            logInfo("RecordingCoordinator: Firing deferred push-to-talk cancel")
+            cancelRecording()
+        } else if pttPendingStop {
+            pttPendingStop = false
+            logInfo("RecordingCoordinator: Firing deferred push-to-talk stop")
+            toggleRecording()
+        }
+    }
+
     private func toggleRecording(clipboardOnly: Bool = false) {
         logInfo("RecordingCoordinator: toggleRecording called, current state: \(audioManager.isRecording), clipboardOnly: \(clipboardOnly)")
 
@@ -225,8 +299,8 @@ class RecordingCoordinator: ObservableObject {
     private func showFileSelectionError() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "File Error"
-            alert.informativeText = "Unable to read the selected audio file. Please choose a different file."
+            alert.messageText = "Erro de arquivo"
+            alert.informativeText = "Não foi possível ler o arquivo de áudio selecionado. Escolha outro arquivo."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "OK")
             alert.runModal()
@@ -236,8 +310,8 @@ class RecordingCoordinator: ObservableObject {
     private func showRecordingError() {
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Recording Error"
-            alert.informativeText = "Failed to capture audio recording. Please try again."
+            alert.messageText = "Erro de gravação"
+            alert.informativeText = "Falha ao capturar a gravação de áudio. Tente novamente."
             alert.alertStyle = .warning
             alert.addButton(withTitle: "OK")
             alert.runModal()
@@ -249,13 +323,13 @@ class RecordingCoordinator: ObservableObject {
         
         DispatchQueue.main.async {
             let alert = NSAlert()
-            alert.messageText = "Transcription Error"
-            alert.informativeText = "Failed to transcribe audio after multiple attempts. Please check your API key and internet connection."
+            alert.messageText = "Erro de transcrição"
+            alert.informativeText = "Falha ao transcrever o áudio após várias tentativas. Verifique sua chave de API e a conexão com a internet."
             alert.alertStyle = .warning
-            alert.addButton(withTitle: "Retry") // First button (return code: 1000)
-            alert.addButton(withTitle: "Show in Finder") // Second button (return code: 1001)
-            alert.addButton(withTitle: "View Logs") // Added third button
-            alert.addButton(withTitle: "Cancel") // Fourth button (return code: 1003)
+            alert.addButton(withTitle: "Tentar novamente") // First button (return code: 1000)
+            alert.addButton(withTitle: "Mostrar no Finder") // Second button (return code: 1001)
+            alert.addButton(withTitle: "Ver registros") // Added third button
+            alert.addButton(withTitle: "Cancelar") // Fourth button (return code: 1003)
             
             let response = alert.runModal()
             

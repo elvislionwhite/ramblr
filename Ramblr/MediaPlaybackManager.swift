@@ -36,19 +36,19 @@ class MediaPlaybackManager: ObservableObject {
         availabilityError = nil
 
         guard let path = Bundle.main.path(forResource: "media-helper", ofType: nil) else {
-            setUnavailable("media-helper is missing from the app bundle. Rebuild Ramblr after installing media-control.")
+            setUnavailable("O media-helper está faltando no pacote do app. Recompile o Ramblr após instalar o media-control.")
             return
         }
 
         guard FileManager.default.isExecutableFile(atPath: path) else {
-            setUnavailable("media-helper is bundled but is not executable. Rebuild Ramblr.")
+            setUnavailable("O media-helper está incluído, mas não é executável. Recompile o Ramblr.")
             return
         }
 
         let resourcesURL = URL(fileURLWithPath: path).deletingLastPathComponent()
         let adapterURL = resourcesURL.appendingPathComponent("MediaRemoteAdapter.dylib")
         guard FileManager.default.fileExists(atPath: adapterURL.path) else {
-            setUnavailable("MediaRemoteAdapter.dylib is missing from the app bundle. Install media-control and rebuild Ramblr.")
+            setUnavailable("O MediaRemoteAdapter.dylib está faltando no pacote do app. Instale o media-control e recompile o Ramblr.")
             return
         }
 
@@ -71,7 +71,7 @@ class MediaPlaybackManager: ObservableObject {
     }
 
     private func reportUnavailable(_ message: String? = nil, completion: @escaping () -> Void) {
-        let message = message ?? availabilityError ?? "Pause media is unavailable because the media helper is not ready."
+        let message = message ?? availabilityError ?? "A pausa de mídia está indisponível porque o helper de mídia não está pronto."
         logError("MediaPlaybackManager: \(message)")
 
         let showAlertAndContinue = {
@@ -81,7 +81,7 @@ class MediaPlaybackManager: ObservableObject {
                 self.didShowUnavailableAlert = true
 
                 let alert = NSAlert()
-                alert.messageText = "Pause Media Unavailable"
+                alert.messageText = "Pausa de mídia indisponível"
                 alert.informativeText = message
                 alert.alertStyle = .warning
                 alert.addButton(withTitle: "OK")
@@ -140,7 +140,7 @@ class MediaPlaybackManager: ObservableObject {
     private func playbackState() -> PlaybackState {
         guard let output = runHelper(["get-state"]) else {
             logError("MediaPlaybackManager: Unable to determine media playback state")
-            return .unavailable("Pause media helper failed. Check the Ramblr log for details.")
+            return .unavailable("O helper de pausa de mídia falhou. Verifique o registro do Ramblr para detalhes.")
         }
 
         logInfo("MediaPlaybackManager: get-state = \(output)")
@@ -153,7 +153,7 @@ class MediaPlaybackManager: ObservableObject {
         default:
             let detail = output.isEmpty ? "<empty>" : output
             logError("MediaPlaybackManager: Unexpected media-helper get-state output: \(detail)")
-            return .unavailable("Pause media helper returned an unexpected playback state. Check the Ramblr log for details.")
+            return .unavailable("O helper de pausa de mídia retornou um estado de reprodução inesperado. Verifique o registro do Ramblr para detalhes.")
         }
     }
 

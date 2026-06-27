@@ -24,7 +24,7 @@ final class SaveFolderPanel {
 
         let hosting = NSHostingController(rootView: content)
         let panel = NSPanel(contentViewController: hosting)
-        panel.title = "Save Transcriptions"
+        panel.title = "Salvar transcrições"
         panel.styleMask = [.titled, .closable, .utilityWindow]
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
@@ -58,12 +58,12 @@ private struct SaveFolderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Save Transcriptions").font(.headline)
+            Text("Salvar transcrições").font(.headline)
 
             HStack {
-                Text("Folder:")
+                Text("Pasta:")
                 if folderPath.isEmpty {
-                    Text("None selected")
+                    Text("Nenhuma selecionada")
                         .foregroundColor(.secondary)
                 } else {
                     Text(abbreviatePath(folderPath))
@@ -71,26 +71,26 @@ private struct SaveFolderView: View {
                         .truncationMode(.middle)
                 }
                 Spacer()
-                Button("Choose...") {
+                Button("Escolher...") {
                     chooseFolder()
                 }
             }
 
             HStack {
-                Text("Subfolder format:")
+                Text("Formato da subpasta:")
                 TextField("{year}/{month}/{day}", text: $subdirectoryFormat)
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 180)
             }
 
-            Text("Tokens: {year} {month} {day} {hour} {minute}")
+            Text("Variáveis: {year} {month} {day} {hour} {minute}")
                 .font(.caption)
                 .foregroundColor(.secondary)
 
             HStack {
                 Spacer()
-                Button("Cancel") { onCancel() }
-                Button("Save") {
+                Button("Cancelar") { onCancel() }
+                Button("Salvar") {
                     onSave(folderPath, subdirectoryFormat)
                 }
                 .keyboardShortcut(.defaultAction)
@@ -102,8 +102,8 @@ private struct SaveFolderView: View {
 
     private func chooseFolder() {
         let panel = NSOpenPanel()
-        panel.title = "Choose Transcription Save Folder"
-        panel.prompt = "Select"
+        panel.title = "Escolher pasta para salvar transcrições"
+        panel.prompt = "Selecionar"
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
